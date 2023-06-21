@@ -1,0 +1,9 @@
+  An exercise in C++ after a long while of focusing on webdev
+RAYPONG is a re-make de-make of the classic arcade game Pong                                                 
+                    PROGRAMMING - NIEP
+                                                            
+                       ASSETS USED:
+                Mecha font by Captain Falcon
+              Keyboard scheme icon by xPheRe
+
+                 RAYLIB BY RAMON SANTAMARIA

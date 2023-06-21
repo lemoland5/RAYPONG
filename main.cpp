@@ -1,7 +1,11 @@
 #include "raylib.h"
 
+#include <fstream>  // about.txt, options.ini
+#include <string>
+
+
 #define MAX_FONTS       1
-#define MAX_MESSAGES    12
+#define MAX_MESSAGES    20
 #define MAX_IMAGES      4
 
 enum State {
@@ -9,6 +13,12 @@ enum State {
     Menu,
     Ingame,
     Controls
+};
+
+enum SubState{
+    None,
+    Options,
+    About
 };
 
 enum Direction{
@@ -57,30 +67,53 @@ int main(){
     // ----------------------------------------------------------------------------------------------------------------------
     // Initialisation
     // ----------------------------------------------------------------------------------------------------------------------
-    const int SCREEN_WIDTH = 800;
-    const int SCREEN_HEIGHT = 450;
+    const int SCREEN_WIDTH = 1000;          // 1000
+    const int SCREEN_HEIGHT = 600;          // 600
     const char* PROCESS_NAME = "RAYPONG";
     SetTargetFPS(60);
     
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, PROCESS_NAME);
 
     // game manager
-    State GameState = Title;   // default is Title
-    int frame_count = 0;        // resets every 10s
+    State GameState = Controls;     // default is Controls
+    SubState GameStateSub = None;   // default is None
+    int frame_count = 0;            // resets every 10s
     bool paused = false;
     bool AlreadyClosed = false;
 
     // images
-    Image keyboard = LoadImage("resources/img/keyboard.png");    // keyboard scheme
-    Texture2D keyboardText = LoadTextureFromImage(keyboard);
+    Image keyboard = LoadImage("resources/img/keyboard.png");
+    Texture2D keyboardText = LoadTextureFromImage(keyboard);    // keyboard scheme
     UnloadImage(keyboard);
 
+    
 
     // fonts
     Font fonts[MAX_FONTS] = { 0 };
     fonts[0] = LoadFont("resources/fonts/mecha.png");   // mecha
     
     //messages
+
+        // read from about.txt
+    std::string about_data;
+    const char* ABOUT_DIRNAME = "resources/data/about.txt";
+    std::ifstream about_file(ABOUT_DIRNAME);
+    if(about_file.good()){
+        if (!about_file.is_open())
+        {
+            CloseWindow();
+            return 1;
+        }    
+        std::string line;
+        while(std::getline(about_file, line)){
+            about_data += line + "\n";
+        }
+        about_file.close();
+    }
+    else{
+        about_data = "ABOUT INFORMATION NOT FOUND";
+    }
+
     const char* messages[MAX_MESSAGES] = { "[msg]" };
     messages[0] = "A GAME BY NIEP";         // bootup
     messages[1] = "PRESS ANY KEY";          // bootup
@@ -94,6 +127,8 @@ int main(){
     messages[9] = "RESTART";                // pause menu
     messages[10] = "RESTART ?";             // pause menu - restart confirmation
     messages[11] = "MAIN MENU";             // pause menu
+    messages[12] = const_cast<char*>(about_data.c_str());   // about
+    
 
     Vector2 TEXT_POS;
     TEXT_POS.x = ((SCREEN_WIDTH/2.0f) - fonts[0].baseSize*6.5f);
@@ -103,7 +138,7 @@ int main(){
 
     //transition controller
     float transition_counter = 1.0f;                                            // numeric controller
-    bool transition_running_title = false;                                            // bool controller
+    bool transition_running_title = false;                                      // bool controller
 
     unsigned char transition_alpha;                                             
     transition_alpha = static_cast<unsigned char>(transition_counter * 100);    // alpha  
@@ -131,7 +166,7 @@ int main(){
     player.sizeY = 75.0f;
     player.sizeX = 20.0f;
     player.speed = 12.0f;
-    player.color = (Color){100, 200, 150, 255};
+    player.color = (Color){100, 200, 150, 255}; // pale green
     player.score = 0;
 
     // enemy setup
@@ -139,22 +174,22 @@ int main(){
     enemy.sizeY = 75.0f;
     enemy.sizeX = 20.0f;
     enemy.speed = 12.0f;
-    enemy.color = (Color){100, 150, 200, 255};
+    enemy.color = (Color){100, 150, 200, 255};  // pale blue
     enemy.score = 0;
 
     //ball setup
     ball.position = (Vector2){SCREEN_WIDTH/2, SCREEN_HEIGHT/2};
     ball.size = 12.5f;
-    ball.color = (Color){200, 200, 200, 255};
+    ball.color = (Color){200, 200, 200, 255};   // white
     ball.vel = (Vector2){-7, 7};
 
     // goal setup
     leftgoal.wall = Left;
-    leftgoal.color = (Color){75,200,75,255};
+    leftgoal.color = (Color){75,200,75,255};    // lime green
     leftgoal.width = 10;
 
     rightgoal.wall = Right;
-    rightgoal.color = (Color){75,75,200,255};
+    rightgoal.color = (Color){75,75,200,255};   // dark blue
     rightgoal.width = 10;
 
 
@@ -256,8 +291,9 @@ int main(){
         }
 
         if(GameState == Menu){
-        
-            BeginDrawing();
+            if(GameStateSub == None){
+
+                BeginDrawing();
             
                 ClearBackground((Color){70, 70, 70, 100});
 
@@ -306,48 +342,98 @@ int main(){
                 (Color){200, 200, 200, static_cast<unsigned char>((menu_alpha[4] + 1.0f)* 100)});
 
 
-            EndDrawing();
+                EndDrawing();
 
-            // start getting input
-            if(!menu_first_interacted){
-                if(IsKeyPressed(KEY_DOWN)){         // downarrow - if nothing selected
-                     menu_selected = 1;
-                     menu_first_interacted = true;
+                // start getting input
+                if(!menu_first_interacted){
+                    if(IsKeyPressed(KEY_DOWN)){         // downarrow - if nothing selected
+                        menu_selected = 1;
+                        menu_first_interacted = true;
+                    }
+                    if(IsKeyPressed(KEY_UP)){           // uparrow - if nothing selected
+                        menu_selected = 4;
+                        menu_first_interacted = true;
+                    }   
                 }
-                if(IsKeyPressed(KEY_UP)){           // uparrow - if nothing selected
-                     menu_selected = 4;
-                     menu_first_interacted = true;
-                }   
-            }
-            else{
-                if(menu_selected < 1) menu_selected = 4;    //safeguard - loop to end
-                if(menu_selected > 4) menu_selected = 1;    //safeguard - loop to start
+                else{
+                    if(menu_selected < 1) menu_selected = 4;    //safeguard - loop to end
+                    if(menu_selected > 4) menu_selected = 1;    //safeguard - loop to start
+                    
+                    if(IsKeyPressed(KEY_DOWN)) ++menu_selected; // downarrow
+                    if(IsKeyPressed(KEY_UP)) --menu_selected;   // uparrow
+
+                    
+
+                    if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 1){            // option 1 - start game
+                        GameState = Ingame;
+                        GameStateSub = None;
+                        menu_selected = 0;
+                        menu_first_interacted = false;
+                    }
+                    // I love poland                                                    // option 2 - open settings page                 
+
+                    if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 3){            // option 3 - open about page
+                        GameStateSub = About;
+                        menu_selected = 0;
+                        menu_first_interacted = false;
+                    }
+
+                    if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 4){            // option 4 - close window
+                        GameState = Controls;
+                        GameStateSub = None;
+                        for(int i = 0; i< MAX_FONTS; i++) UnloadFont(fonts[i]);
+                        AlreadyClosed = true;
+                        CloseWindow();
+                    }
+                }
                 
-                if(IsKeyPressed(KEY_DOWN)) ++menu_selected; // downarrow
-                if(IsKeyPressed(KEY_UP)) --menu_selected;   // uparrow
+                // set option alpha
+                for(int i = 1; i <= 4; i++){
+                    menu_alpha[i] = 0.0f;
+                }
+                menu_alpha[menu_selected] = 1.5f;
+
+            }
+
+            if(GameStateSub == About){
+                // todo
+
+                BeginDrawing();
+                
+                    ClearBackground((Color){70, 70, 70, 100});
+
+                    // title
+                    DrawTextEx(fonts[0], 
+                    messages[2], 
+                    (Vector2){TEXT_POS.x + fonts[0].baseSize*1.5f, TEXT_POS.y- fonts[0].baseSize*12.5f},
+                    fonts[0].baseSize*4.0f, 
+                    TEXT_SPACING, 
+                    (Color){200, 200, 200, 100});
+
+                    // about description
+                    DrawTextEx(fonts[0], 
+                    messages[12], 
+                    (Vector2){TEXT_POS.x - fonts[0].baseSize*12.3f, TEXT_POS.y- fonts[0].baseSize*7.5f},
+                    fonts[0].baseSize*1.5f, 
+                    TEXT_SPACING, 
+                    (Color){200, 200, 200, 100});
+
+                    // back to menu
+                    DrawTextEx(fonts[0], 
+                    messages[11], 
+                    (Vector2){TEXT_POS.x + fonts[0].baseSize*3.85f, TEXT_POS.y + fonts[0].baseSize*13.5f},
+                    fonts[0].baseSize*1.5f, 
+                    TEXT_SPACING, 
+                    (Color){200, 200, 200, 255});
 
                 
+                EndDrawing();
 
-                if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 1){            // option 1 - start game
-                    GameState = Ingame;
-                    menu_selected = 0;
-                    menu_first_interacted = false;
-                }
-                // I love poland                                                    // option 2 - open settings page                            
-                // I love poland                                                    // option 3 - open about page                            
-                if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 4){            // option 4 - close window
-                    for(int i = 0; i< MAX_FONTS; i++) UnloadFont(fonts[i]);
-                    AlreadyClosed = true;
-                    CloseWindow();
+                if(IsKeyPressed(KEY_USER_PAUSE) || IsKeyPressed(KEY_USER_SELECT)){
+                    GameState = Menu;
+                    GameStateSub = None;
                 }
             }
-            
-            // set option alpha
-            for(int i = 1; i <= 4; i++){
-                menu_alpha[i] = 0.0f;
-            }
-            menu_alpha[menu_selected] = 1.5f;
-
         }
     
         if(GameState == Ingame){

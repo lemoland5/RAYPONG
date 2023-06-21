@@ -7,13 +7,15 @@
 #### Completed ####
 - basic 2 player mode
 - basic menu structure
+- about page
 
 #### In development ####
 - loading options from file (user configurable)
     - custom keybindings
+    - custom resolution
+        - make game entity members scale with screen size
     - color palette
 - custom color palettes
-- about page
 - custom match settings
     - winning amount of points
     - time limit
