@@ -15,7 +15,9 @@
     - custom resolution
         - make game entity members scale with screen size
     - color palette
+- feat/achievement system
 - custom color palettes
+    - palettes unlock afer completing specific feats
 - custom match settings
     - winning amount of points
     - time limit
