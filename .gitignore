@@ -1,0 +1,6 @@
+# VSC files
+.vscode/
+main.code-workspace
+
+# Compilation results
+*.exe
