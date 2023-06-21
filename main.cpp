@@ -1,24 +1,30 @@
 #include "raylib.h"
+#include "palette.h"
 
-#include <fstream>  // about.txt, options.ini
+#include <fstream>  // about.txt
 #include <string>
 
 
-#define MAX_FONTS       1
-#define MAX_MESSAGES    20
-#define MAX_IMAGES      4
+#define MAX_FONTS               1
+#define MAX_MESSAGES            20
+#define MAX_IMAGES              4
+#define MAX_OPTIONS_VAL_LENGTH  5
+
+std::string line;
 
 enum State {
     Title,
     Menu,
     Ingame,
-    Controls
+    Controls,
+    PaletteTest
 };
 
 enum SubState{
     None,
     Options,
-    About
+    About,
+    Stats
 };
 
 enum Direction{
@@ -51,6 +57,7 @@ typedef struct Goal{
 } Goal;
 
 
+
 Pong player = { 0 };
 Pong enemy = { 0 };
 Ball ball = { 0 };
@@ -61,14 +68,13 @@ Goal rightgoal;
 // ----------------------------------------------------------------------------------------------------------------------
 int main(){
 
-
-    
-
     // ----------------------------------------------------------------------------------------------------------------------
     // Initialisation
     // ----------------------------------------------------------------------------------------------------------------------
-    const int SCREEN_WIDTH = 1000;          // 1000
-    const int SCREEN_HEIGHT = 600;          // 600
+
+    const int SCREEN_WIDTH = 1000;  // 1000
+    const int SCREEN_HEIGHT = 600;  // 600
+
     const char* PROCESS_NAME = "RAYPONG";
     SetTargetFPS(60);
     
@@ -85,6 +91,9 @@ int main(){
     Image keyboard = LoadImage("resources/img/keyboard.png");
     Texture2D keyboardText = LoadTextureFromImage(keyboard);    // keyboard scheme
     UnloadImage(keyboard);
+
+    // palettes
+    Palette CurrentPalette = PALETTE_DEFAULT;
 
     
 
@@ -104,7 +113,6 @@ int main(){
             CloseWindow();
             return 1;
         }    
-        std::string line;
         while(std::getline(about_file, line)){
             about_data += line + "\n";
         }
@@ -113,6 +121,7 @@ int main(){
     else{
         about_data = "ABOUT INFORMATION NOT FOUND";
     }
+
 
     const char* messages[MAX_MESSAGES] = { "[msg]" };
     messages[0] = "A GAME BY NIEP";         // bootup
@@ -128,6 +137,8 @@ int main(){
     messages[10] = "RESTART ?";             // pause menu - restart confirmation
     messages[11] = "MAIN MENU";             // pause menu
     messages[12] = const_cast<char*>(about_data.c_str());   // about
+    messages[13] = "STATS";                 // menu
+    // messages[14] = const_cast<char*>(options_data.c_str()); 
     
 
     Vector2 TEXT_POS;
@@ -149,7 +160,7 @@ int main(){
 
     // menu controller
     int menu_selected = 0;              // indexes slot 0
-    float menu_alpha[5] = { 0 };        // slot 0 used for redundancy
+    float menu_alpha[6] = { 0 };        // slot 0 used for redundancy
     menu_alpha[menu_selected] = 1.0f;
     bool menu_first_interacted = false; // to check if any option has been highlighted before
     bool restart_confirm = true;        // true means needs confirmation
@@ -166,7 +177,7 @@ int main(){
     player.sizeY = 75.0f;
     player.sizeX = 20.0f;
     player.speed = 12.0f;
-    player.color = (Color){100, 200, 150, 255}; // pale green
+    player.color = CurrentPalette.COLOR_PONG1;
     player.score = 0;
 
     // enemy setup
@@ -174,22 +185,22 @@ int main(){
     enemy.sizeY = 75.0f;
     enemy.sizeX = 20.0f;
     enemy.speed = 12.0f;
-    enemy.color = (Color){100, 150, 200, 255};  // pale blue
+    enemy.color = CurrentPalette.COLOR_PONG2;
     enemy.score = 0;
 
     //ball setup
     ball.position = (Vector2){SCREEN_WIDTH/2, SCREEN_HEIGHT/2};
     ball.size = 12.5f;
-    ball.color = (Color){200, 200, 200, 255};   // white
+    ball.color = CurrentPalette.COLOR_BALL;
     ball.vel = (Vector2){-7, 7};
 
     // goal setup
     leftgoal.wall = Left;
-    leftgoal.color = (Color){75,200,75,255};    // lime green
+    leftgoal.color = CurrentPalette.COLOR_GOAL1;
     leftgoal.width = 10;
 
     rightgoal.wall = Right;
-    rightgoal.color = (Color){75,75,200,255};   // dark blue
+    rightgoal.color = CurrentPalette.COLOR_GOAL2;
     rightgoal.width = 10;
 
 
@@ -216,6 +227,23 @@ int main(){
         ++frame_count;
         if(frame_count == 600) frame_count = 0;
 
+        if(GameState == PaletteTest){
+            BeginDrawing();
+
+                DrawRectangle(0,0,SCREEN_WIDTH,SCREEN_HEIGHT/10,CurrentPalette.COLOR_BG);
+                DrawRectangle(0,60,SCREEN_WIDTH,SCREEN_HEIGHT/10,CurrentPalette.COLOR_TEXT);
+                DrawRectangle(0,120,SCREEN_WIDTH,SCREEN_HEIGHT/10,CurrentPalette.COLOR_TEXT_HIGHLIGHT);
+                DrawRectangle(0,180,SCREEN_WIDTH,SCREEN_HEIGHT/10,CurrentPalette.COLOR_TEXT_DISABLED);
+                DrawRectangle(0,240,SCREEN_WIDTH,SCREEN_HEIGHT/10,CurrentPalette.COLOR_TEXT_CONFIRM);
+                DrawRectangle(0,300,SCREEN_WIDTH,SCREEN_HEIGHT/10,CurrentPalette.COLOR_BALL);
+                DrawRectangle(0,360,SCREEN_WIDTH,SCREEN_HEIGHT/10,CurrentPalette.COLOR_PONG1);
+                DrawRectangle(0,420,SCREEN_WIDTH,SCREEN_HEIGHT/10,CurrentPalette.COLOR_GOAL1);
+                DrawRectangle(0,480,SCREEN_WIDTH,SCREEN_HEIGHT/10,CurrentPalette.COLOR_PONG2);
+                DrawRectangle(0,540,SCREEN_WIDTH,SCREEN_HEIGHT/10,CurrentPalette.COLOR_GOAL2);
+
+            EndDrawing();
+        }
+
         if(GameState == Controls){
 
             if(frame_count%60 == 0) transition_running_controls = true;
@@ -229,12 +257,12 @@ int main(){
 
             BeginDrawing();
 
-                ClearBackground((Color){70 ,70 ,70 , 100});
+                ClearBackground(CurrentPalette.COLOR_BG);
 
                 DrawTexture(keyboardText, 
                 SCREEN_WIDTH/2 - 275.0f, 
                 SCREEN_HEIGHT/2 - 84.0f, 
-                (Color){255, 255, 255, static_cast<unsigned char>(controls_alpha)});
+                (Color){CurrentPalette.COLOR_TEXT.r, CurrentPalette.COLOR_TEXT.g, CurrentPalette.COLOR_TEXT.b, static_cast<unsigned char>(controls_alpha)});
 
 
             EndDrawing();
@@ -244,7 +272,8 @@ int main(){
 
             BeginDrawing();
             
-                ClearBackground((Color){70 ,70 ,70 , 100});
+                ClearBackground(CurrentPalette.COLOR_BG);
+
 
                 // author
                 DrawTextEx(fonts[0], 
@@ -252,7 +281,10 @@ int main(){
                 TEXT_POS, 
                 fonts[0].baseSize*4.0f, 
                 TEXT_SPACING, 
-                (Color){200, 200, 200, transition_alpha});
+                (Color){CurrentPalette.COLOR_TEXT.r,
+                CurrentPalette.COLOR_TEXT.g,
+                CurrentPalette.COLOR_TEXT.b, 
+                transition_alpha});
 
                 // button not pressed
                 if(frame_count%90<=45 && !transition_running_title){
@@ -261,7 +293,10 @@ int main(){
                     (Vector2){TEXT_POS.x, (TEXT_POS.y + fonts[0].baseSize*3.4f)}, 
                     fonts[0].baseSize*2.0f, 
                     TEXT_SPACING, 
-                    (Color){200, 200, 200, transition_alpha});
+                    (Color){CurrentPalette.COLOR_TEXT.r,
+                    CurrentPalette.COLOR_TEXT.g,
+                    CurrentPalette.COLOR_TEXT.b, 
+                    transition_alpha});
                 }
 
                 if(frame_count%10<=5 && transition_running_title){
@@ -270,7 +305,10 @@ int main(){
                     (Vector2){TEXT_POS.x, (TEXT_POS.y + fonts[0].baseSize*3.4f)}, 
                     fonts[0].baseSize*2.0f, 
                     TEXT_SPACING, 
-                    (Color){200, 200, 200, transition_alpha});
+                    (Color){CurrentPalette.COLOR_TEXT.r,
+                    CurrentPalette.COLOR_TEXT.g,
+                    CurrentPalette.COLOR_TEXT.b,
+                    transition_alpha});
                 }
 
             EndDrawing();
@@ -295,7 +333,7 @@ int main(){
 
                 BeginDrawing();
             
-                ClearBackground((Color){70, 70, 70, 100});
+                ClearBackground(CurrentPalette.COLOR_BG);
 
                 // title
                 DrawTextEx(fonts[0], 
@@ -303,14 +341,14 @@ int main(){
                 (Vector2){TEXT_POS.x + fonts[0].baseSize*1.1f, TEXT_POS.y- fonts[0].baseSize*11.0f},
                 fonts[0].baseSize*4.0f, 
                 TEXT_SPACING, 
-                (Color){200, 200, 200, 100});
+                CurrentPalette.COLOR_TEXT);
 
                 DrawTextEx(fonts[0], 
                 messages[3], 
                 (Vector2){TEXT_POS.x - fonts[0].baseSize*1.0f, TEXT_POS.y- fonts[0].baseSize*6.5f},
                 fonts[0].baseSize*2.0f, 
                 TEXT_SPACING, 
-                (Color){200, 200, 200, 100});
+                CurrentPalette.COLOR_TEXT);
 
                 // selection (4,5,6,7)
                 DrawTextEx(fonts[0],                                    
@@ -318,28 +356,50 @@ int main(){
                 (Vector2){TEXT_POS.x + fonts[0].baseSize*3.95f, TEXT_POS.y},
                 fonts[0].baseSize*3.0f, 
                 TEXT_SPACING, 
-                (Color){200, 200, 200, static_cast<unsigned char>((menu_alpha[1] + 1.0f)* 100)});
+                (Color){CurrentPalette.COLOR_TEXT.r, 
+                CurrentPalette.COLOR_TEXT.g, 
+                CurrentPalette.COLOR_TEXT.g, 
+                static_cast<unsigned char>((menu_alpha[1] + 1.0f)* 100)});
 
                 DrawTextEx(fonts[0],                                    
                 messages[5], 
                 (Vector2){TEXT_POS.x + fonts[0].baseSize*2.60f, TEXT_POS.y + fonts[0].baseSize*2.5f},
                 fonts[0].baseSize*3.0f, 
                 TEXT_SPACING, 
-                (Color){200, 200, 200, static_cast<unsigned char>((menu_alpha[2] + 1.0f)* 100)});
+                (Color){CurrentPalette.COLOR_TEXT_DISABLED.r, 
+                CurrentPalette.COLOR_TEXT_DISABLED.g, 
+                CurrentPalette.COLOR_TEXT_DISABLED.g, 
+                static_cast<unsigned char>((menu_alpha[2] + 1.0f)* 100)});
 
                 DrawTextEx(fonts[0],                                    
                 messages[6], 
                 (Vector2){TEXT_POS.x + fonts[0].baseSize*3.5f, TEXT_POS.y + fonts[0].baseSize*5.0f},
                 fonts[0].baseSize*3.0f, 
                 TEXT_SPACING, 
-                (Color){200, 200, 200, static_cast<unsigned char>((menu_alpha[3] + 1.0f)* 100)});
+                (Color){CurrentPalette.COLOR_TEXT.r, 
+                CurrentPalette.COLOR_TEXT.g, 
+                CurrentPalette.COLOR_TEXT.g, 
+                static_cast<unsigned char>((menu_alpha[3] + 1.0f)* 100)});
                 
                 DrawTextEx(fonts[0],                                    
-                messages[7], 
-                (Vector2){TEXT_POS.x + fonts[0].baseSize*4.35f, TEXT_POS.y + fonts[0].baseSize*7.5f},
+                messages[13], 
+                (Vector2){TEXT_POS.x + fonts[0].baseSize*3.35f, TEXT_POS.y + fonts[0].baseSize*7.5f},
                 fonts[0].baseSize*3.0f, 
                 TEXT_SPACING, 
-                (Color){200, 200, 200, static_cast<unsigned char>((menu_alpha[4] + 1.0f)* 100)});
+                (Color){CurrentPalette.COLOR_TEXT_DISABLED.r, 
+                CurrentPalette.COLOR_TEXT_DISABLED.g, 
+                CurrentPalette.COLOR_TEXT_DISABLED.g, 
+                static_cast<unsigned char>((menu_alpha[4] + 1.0f)* 100)});
+
+                DrawTextEx(fonts[0],                                    
+                messages[7], 
+                (Vector2){TEXT_POS.x + fonts[0].baseSize*4.35f, TEXT_POS.y + fonts[0].baseSize*10.0f},
+                fonts[0].baseSize*3.0f, 
+                TEXT_SPACING, 
+                (Color){CurrentPalette.COLOR_TEXT.r, 
+                CurrentPalette.COLOR_TEXT.g, 
+                CurrentPalette.COLOR_TEXT.g, 
+                static_cast<unsigned char>((menu_alpha[5] + 1.0f)* 100)});
 
 
                 EndDrawing();
@@ -351,17 +411,16 @@ int main(){
                         menu_first_interacted = true;
                     }
                     if(IsKeyPressed(KEY_UP)){           // uparrow - if nothing selected
-                        menu_selected = 4;
+                        menu_selected = 5;
                         menu_first_interacted = true;
                     }   
                 }
                 else{
-                    if(menu_selected < 1) menu_selected = 4;    //safeguard - loop to end
-                    if(menu_selected > 4) menu_selected = 1;    //safeguard - loop to start
-                    
                     if(IsKeyPressed(KEY_DOWN)) ++menu_selected; // downarrow
                     if(IsKeyPressed(KEY_UP)) --menu_selected;   // uparrow
 
+                    if(menu_selected < 1) menu_selected = 5;    //safeguard - loop to end
+                    if(menu_selected > 5) menu_selected = 1;    //safeguard - loop to start
                     
 
                     if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 1){            // option 1 - start game
@@ -378,7 +437,9 @@ int main(){
                         menu_first_interacted = false;
                     }
 
-                    if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 4){            // option 4 - close window
+                    // I love poland                                                    // option 4 - open stats page
+
+                    if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 5){            // option 5 - close window
                         GameState = Controls;
                         GameStateSub = None;
                         for(int i = 0; i< MAX_FONTS; i++) UnloadFont(fonts[i]);
@@ -388,7 +449,7 @@ int main(){
                 }
                 
                 // set option alpha
-                for(int i = 1; i <= 4; i++){
+                for(int i = 1; i <= 5; i++){
                     menu_alpha[i] = 0.0f;
                 }
                 menu_alpha[menu_selected] = 1.5f;
@@ -400,7 +461,7 @@ int main(){
 
                 BeginDrawing();
                 
-                    ClearBackground((Color){70, 70, 70, 100});
+                    ClearBackground(CurrentPalette.COLOR_BG);
 
                     // title
                     DrawTextEx(fonts[0], 
@@ -408,7 +469,7 @@ int main(){
                     (Vector2){TEXT_POS.x + fonts[0].baseSize*1.5f, TEXT_POS.y- fonts[0].baseSize*12.5f},
                     fonts[0].baseSize*4.0f, 
                     TEXT_SPACING, 
-                    (Color){200, 200, 200, 100});
+                    CurrentPalette.COLOR_TEXT);
 
                     // about description
                     DrawTextEx(fonts[0], 
@@ -416,7 +477,7 @@ int main(){
                     (Vector2){TEXT_POS.x - fonts[0].baseSize*12.3f, TEXT_POS.y- fonts[0].baseSize*7.5f},
                     fonts[0].baseSize*1.5f, 
                     TEXT_SPACING, 
-                    (Color){200, 200, 200, 100});
+                    CurrentPalette.COLOR_TEXT);
 
                     // back to menu
                     DrawTextEx(fonts[0], 
@@ -424,7 +485,7 @@ int main(){
                     (Vector2){TEXT_POS.x + fonts[0].baseSize*3.85f, TEXT_POS.y + fonts[0].baseSize*13.5f},
                     fonts[0].baseSize*1.5f, 
                     TEXT_SPACING, 
-                    (Color){200, 200, 200, 255});
+                    (Color){CurrentPalette.COLOR_TEXT.r, CurrentPalette.COLOR_TEXT.g, CurrentPalette.COLOR_TEXT.b, 255});
 
                 
                 EndDrawing();
@@ -470,7 +531,7 @@ int main(){
 
             // PONG wall collision handler
             if(player.position.y < 0) player.position.y = 0;
-            if(player.position.y + player.sizeY > SCREEN_HEIGHT) player.position.y = SCREEN_HEIGHT-player.sizeY;
+            if(player.position.y + player.sizeY > SCREEN_HEIGHT) player.position.y = SCREEN_HEIGHT-player.sizeY;    
 
             if(enemy.position.y < 0) enemy.position.y = 0;
             if(enemy.position.y + enemy.sizeY > SCREEN_HEIGHT) enemy.position.y = SCREEN_HEIGHT-enemy.sizeY;
@@ -508,7 +569,7 @@ int main(){
 
             BeginDrawing();
 
-                ClearBackground((Color){70, 70, 70, 100});
+                ClearBackground(CurrentPalette.COLOR_BG);
 
                 // hud
                 DrawTextEx(fonts[0], 
@@ -516,14 +577,14 @@ int main(){
                 (Vector2){50, 10},
                 fonts[0].baseSize*2.0f, 
                 TEXT_SPACING, 
-                (Color){200, 200, 200, 100});
+                CurrentPalette.COLOR_TEXT);
 
                 DrawTextEx(fonts[0], 
                 TextFormat("SCORE: %d",enemy.score), 
                 (Vector2){SCREEN_WIDTH-15-fonts[0].baseSize*8.0f, 10},
                 fonts[0].baseSize*2.0f, 
                 TEXT_SPACING, 
-                (Color){200, 200, 200, 100});
+                CurrentPalette.COLOR_TEXT);
 
                 DrawRectangle(player.position.x, player.position.y, player.sizeX, player.sizeY, player.color);
                 DrawRectangle(enemy.position.x, enemy.position.y, enemy.sizeX, enemy.sizeY, enemy.color);
@@ -538,7 +599,7 @@ int main(){
                     (Vector2){TEXT_POS.x + fonts[0].baseSize*2.67f, TEXT_POS.y},
                     fonts[0].baseSize*3.0f, 
                     TEXT_SPACING, 
-                    (Color){200, 200, 200, static_cast<unsigned char>((menu_alpha[1] + 1.0f)* 100)});
+                    (Color){CurrentPalette.COLOR_TEXT.r, CurrentPalette.COLOR_TEXT.g, CurrentPalette.COLOR_TEXT.b, static_cast<unsigned char>((menu_alpha[1] + 1.0f)* 100)});
 
                     if(!restart_confirm){                        
                         DrawTextEx(fonts[0],                                    
@@ -546,7 +607,7 @@ int main(){
                         (Vector2){TEXT_POS.x + fonts[0].baseSize*2.4f, TEXT_POS.y + fonts[0].baseSize*2.5f},
                         fonts[0].baseSize*3.0f, 
                         TEXT_SPACING, 
-                        (Color){200, 255, 200, static_cast<unsigned char>((menu_alpha[2] + 1.0f)* 100)});
+                        (Color){CurrentPalette.COLOR_TEXT_CONFIRM.r, CurrentPalette.COLOR_TEXT_CONFIRM.g, CurrentPalette.COLOR_TEXT_CONFIRM.b, static_cast<unsigned char>((menu_alpha[2] + 1.0f)* 100)});
                     }
                     else{
                         DrawTextEx(fonts[0],                                    
@@ -554,7 +615,7 @@ int main(){
                         (Vector2){TEXT_POS.x + fonts[0].baseSize*2.4f, TEXT_POS.y + fonts[0].baseSize*2.5f},
                         fonts[0].baseSize*3.0f, 
                         TEXT_SPACING, 
-                        (Color){200, 200, 200, static_cast<unsigned char>((menu_alpha[2] + 1.0f)* 100)});
+                        (Color){CurrentPalette.COLOR_TEXT.r, CurrentPalette.COLOR_TEXT.g, CurrentPalette.COLOR_TEXT.b, static_cast<unsigned char>((menu_alpha[2] + 1.0f)* 100)});
                     }
                     
                     DrawTextEx(fonts[0],                                    
@@ -562,7 +623,7 @@ int main(){
                     (Vector2){TEXT_POS.x + fonts[0].baseSize*1.25f, TEXT_POS.y + fonts[0].baseSize*5.0f},
                     fonts[0].baseSize*3.0f, 
                     TEXT_SPACING, 
-                    (Color){200, 200, 200, static_cast<unsigned char>((menu_alpha[3] + 1.0f)* 100)});
+                    (Color){CurrentPalette.COLOR_TEXT.r, CurrentPalette.COLOR_TEXT.g, CurrentPalette.COLOR_TEXT.b, static_cast<unsigned char>((menu_alpha[3] + 1.0f)* 100)});
                 }
 
             EndDrawing();
@@ -571,6 +632,7 @@ int main(){
                 paused = !paused;   
                 menu_first_interacted = false;
                 menu_selected = false;
+                restart_confirm = true;
             }
 
 
