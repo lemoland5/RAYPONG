@@ -1,7 +1,7 @@
 #include "raylib.h"
 #include "palette.h"
 
-#include <fstream>  // about.txt
+#include <fstream>  // about.txt, log.txt
 
 #define MAX_FONTS               1
 #define MAX_MESSAGES            30
@@ -14,19 +14,20 @@ enum State {
     Controls,       // display of keyboard scheme
     Title,          // a game by niep
     Menu,           // main menu
+    Pregame,        // match options select
     Ingame,         // match
+    Postgame,       // post-match summary
     PaletteTest,    // DEBUG - display test of current color palette
     ReadTest,       // DEBUG - display test of data from read files 
-    Postgame,
 };
 
 enum SubState{
-    None,
-    Options,
-    About,
-    Stats,
-    Singleplayer = 1,
-    Multiplayer = 2,
+    None,               // default state
+    Options,            // settings page
+    About,              // about page
+    Stats,              // stats page
+    Singleplayer = 1,   // singleplayer gamemode
+    Multiplayer = 2,    // multiplayer gamemode
 };
 
 enum Result{
@@ -90,13 +91,14 @@ int main(){
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, PROCESS_NAME);
 
     // game manager --------------------------------------------------------------------------------------------------------------------------- 
-    State GameState = Menu;         // default is Controls
+    State GameState = Controls;         // default is Controls
     SubState GameStateSub = None;   // default is None
     Result GameStateResult = Win;
     int frame_count = 0;            // resets every 10s
     bool paused = false;
     bool AlreadyClosed = false;
 
+    const char* SubState_Standin = "Singleplayer";
     int scoreMax = 10;
     int timeMax = 3;       
     int timeCurrentMinutes = 0;
@@ -229,8 +231,11 @@ int main(){
     messages[21] = "STATS";                 // stats
     messages[23] = "FEATS";                 // stats
     messages[24] = "TOTAL GAMES PLAYED: %d";// stats
-
-    about_file.close();
+    messages[25] = "MATCH OPTIONS";         // pregame
+    messages[26] = "GAMEMODE: %s";          // pregame
+    messages[27] = "WINNING POINTS: %d";    // pregame
+    messages[28] = "TIME LIMIT: %d";        // pregame
+    messages[29] = "START GAME";            // pregame
 
 
     Vector2 TEXT_POS;
@@ -272,6 +277,10 @@ int main(){
     menu_alpha[menu_selected] = 1.0f;
     bool menu_first_interacted = false; // to check if any option has been highlighted before
     bool restart_confirm = true;        // true means needs confirmation
+
+    int menu_selected_option = 0;       // for horizontal menus
+
+
 
     // controls controller (placeholder until I implement keybinds)
     KeyboardKey KEY_USER_SELECT = KEY_ENTER;    
@@ -575,9 +584,17 @@ int main(){
                     
 
                     if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 1){            // option 1 - start game
-                        GameState = Ingame;
+                        GameState = Pregame;
+
                         GameStateSub = Singleplayer;
+                            
+                        scoreMax = 0;
+                        timeMax = 0;       
+                        timeCurrentMinutes = 0;
+                        timeCurrentSeconds = 0;
+
                         menu_selected = 0;
+                        menu_selected_option = 0;
                         menu_first_interacted = false;
                     }
                     if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 2){
@@ -772,7 +789,7 @@ int main(){
                     for(int i = 0; i < 5; i++){
                         DrawRectangle(TEXT_POS.x + 10 - fonts[0].baseSize*11.5f,
                         TEXT_POS.y + 150 - fonts[0].baseSize*2.5f*i,
-                        log_data[i].length()*0.85f - 30,
+                        548,
                         fonts[0].baseSize*2.0f,
                         CurrentPalette.COLOR_GOAL2);
 
@@ -859,6 +876,168 @@ int main(){
 
         }
     
+        if(GameState == Pregame){
+            BeginDrawing();
+
+                ClearBackground(CurrentPalette.COLOR_BG);
+
+                // title
+                DrawTextEx(fonts[0], 
+                messages[25], 
+                (Vector2){TEXT_POS.x - fonts[0].baseSize*3.0f, TEXT_POS.y - fonts[0].baseSize*10.0f},
+                fonts[0].baseSize*4.0f, 
+                TEXT_SPACING, 
+                CurrentPalette.COLOR_TEXT);
+
+                // MAIN MENU
+                DrawTextEx(fonts[0],                                    
+                messages[29], 
+                (Vector2){TEXT_POS.x + fonts[0].baseSize*0.25f, TEXT_POS.y + fonts[0].baseSize*2.5f},
+                fonts[0].baseSize*3.0f, 
+                TEXT_SPACING, 
+                (Color){CurrentPalette.COLOR_TEXT.r, 
+                CurrentPalette.COLOR_TEXT.g, 
+                CurrentPalette.COLOR_TEXT.b, 
+                static_cast<unsigned char>((menu_alpha[1] + 1.0f)* 100)});
+
+
+                // GAMEMODE
+                DrawTextEx(fonts[0],                                    
+                TextFormat(messages[26],SubState_Standin), 
+                (Vector2){TEXT_POS.x - fonts[0].baseSize*5.25f, TEXT_POS.y + fonts[0].baseSize*4.9f},
+                fonts[0].baseSize*3.0f, 
+                TEXT_SPACING, 
+                (Color){CurrentPalette.COLOR_TEXT.r, 
+                CurrentPalette.COLOR_TEXT.g, 
+                CurrentPalette.COLOR_TEXT.b, 
+                static_cast<unsigned char>((menu_alpha[2] + 1.0f)* 100)});
+
+                // WINNING POINTS
+                DrawTextEx(fonts[0],                                    
+                TextFormat(messages[27],scoreMax), 
+                (Vector2){TEXT_POS.x - fonts[0].baseSize*2.0f, TEXT_POS.y + fonts[0].baseSize*7.5f},
+                fonts[0].baseSize*3.0f, 
+                TEXT_SPACING, 
+                (Color){CurrentPalette.COLOR_TEXT.r, 
+                CurrentPalette.COLOR_TEXT.g, 
+                CurrentPalette.COLOR_TEXT.b, 
+                static_cast<unsigned char>((menu_alpha[3] + 1.0f)* 100)});
+
+                // TIME LIMIT
+                DrawTextEx(fonts[0],                                    
+                TextFormat(messages[28],timeMax), 
+                (Vector2){TEXT_POS.x - fonts[0].baseSize*0.0f, TEXT_POS.y + fonts[0].baseSize*10.0f},
+                fonts[0].baseSize*3.0f, 
+                TEXT_SPACING, 
+                (Color){CurrentPalette.COLOR_TEXT.r, 
+                CurrentPalette.COLOR_TEXT.g, 
+                CurrentPalette.COLOR_TEXT.b, 
+                static_cast<unsigned char>((menu_alpha[4] + 1.0f)* 100)});
+
+                // MAIN MENU
+                DrawTextEx(fonts[0],                                    
+                TextFormat(messages[11],timeMax), 
+                (Vector2){TEXT_POS.x + fonts[0].baseSize*1.25f, TEXT_POS.y + fonts[0].baseSize*12.5f},
+                fonts[0].baseSize*3.0f, 
+                TEXT_SPACING, 
+                (Color){CurrentPalette.COLOR_TEXT.r, 
+                CurrentPalette.COLOR_TEXT.g, 
+                CurrentPalette.COLOR_TEXT.b, 
+                static_cast<unsigned char>((menu_alpha[5] + 1.0f)* 100)});
+
+            EndDrawing();
+
+            // start getting input
+            if(!menu_first_interacted){
+                if(IsKeyPressed(KEY_DOWN)){         // downarrow - if nothing selected
+                    menu_selected = 1;
+                    menu_first_interacted = true;
+                }
+                if(IsKeyPressed(KEY_UP)){           // uparrow - if nothing selected
+                    menu_selected = 5;
+                    menu_first_interacted = true;
+                }   
+            }
+            else{
+                if(menu_selected_option == 0){
+                    if(IsKeyPressed(KEY_DOWN)) ++menu_selected; // downarrow
+                    if(IsKeyPressed(KEY_UP)) --menu_selected;   // uparrow
+
+                    if(menu_selected < 1) menu_selected = 5;    //safeguard - loop to end
+                    if(menu_selected > 5) menu_selected = 1;    //safeguard - loop to start
+                    
+
+                    if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 1 && scoreMax > 0 && timeMax > 0){            // option 1 - start game
+                        GameState = Ingame;
+
+                        menu_selected = 0;
+                        menu_first_interacted = false;
+                    }
+                    if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 2){            // modify gamemode
+                        menu_selected = 2;
+                        menu_selected_option = 2;
+                    }                                                            
+
+                    if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 3){            // modify winning points
+                        menu_selected = 3;
+                        menu_selected_option = 3;
+                    }
+                    if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 4){            // modify time limit
+                        menu_selected = 4;
+                        menu_selected_option = 4;
+                    }
+                    if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 5){            // option 5 - main menu
+                        GameState = Menu;
+                        GameStateSub = None;
+                        menu_selected = 0;
+                        menu_first_interacted = false;
+                    }   
+                }
+                if(menu_selected_option == 2){
+                    if(IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_RIGHT)){
+                        if(GameStateSub == Singleplayer){
+                            GameStateSub = Multiplayer;
+                            SubState_Standin = "Multiplayer";
+                        }
+                        else{
+                            GameStateSub = Singleplayer;
+                            SubState_Standin = "Singleplayer";
+                        }
+                    }
+                    if(IsKeyPressed(KEY_USER_PAUSE)){
+                        menu_selected_option = 0;
+                    }
+                }
+                if(menu_selected_option == 3){
+                    if(IsKeyPressed(KEY_RIGHT)){
+                        if(scoreMax < 100) ++scoreMax;
+                    }
+                    if(IsKeyPressed(KEY_LEFT)){
+                        if(scoreMax > 0) --scoreMax;
+                    }
+                    if(IsKeyPressed(KEY_USER_PAUSE)){
+                        menu_selected_option = 0;
+                    }
+                }
+                if(menu_selected_option == 4){
+                    if(IsKeyPressed(KEY_RIGHT)){
+                        if(timeMax < 300) timeMax += 10;
+                    }
+                    if(IsKeyPressed(KEY_LEFT)){
+                        if(timeMax > 0) timeMax -= 10;
+                    }
+                    if(IsKeyPressed(KEY_USER_PAUSE)){
+                        menu_selected_option = 0;
+                    }
+                }
+            }
+            // set option alpha
+            for(int i = 1; i <= 5; i++){
+            menu_alpha[i] = 0.0f;
+            }
+            menu_alpha[menu_selected] = 1.5f;
+        }
+
         if(GameState == Ingame){
 
 

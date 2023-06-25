@@ -12,6 +12,9 @@
 - saving match history
     - displaying on stats page
 - custom color palettes (non-selectable)
+- custom match settings
+    - winning amount of points
+    - time limit
 
 #### In development ####
 - feat/achievement system
@@ -24,6 +27,3 @@
     - color palette
     - choose default gamemode
         - default player
-- custom match settings
-    - winning amount of points
-    - time limit
