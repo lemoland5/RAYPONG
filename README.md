@@ -8,9 +8,14 @@
 - basic 2 player mode
 - basic menu structure
 - about page
+- CPU enemy for custom games
+- saving match history
+    - displaying on stats page
+- custom color palettes (non-selectable)
 
 #### In development ####
 - feat/achievement system
+    - viewable on stats page
 - custom color palettes
     - palettes unlock afer completing specific feats
 - loading options from file (user configurable)
@@ -19,12 +24,6 @@
     - color palette
     - choose default gamemode
         - default player
-        - top/bottom and left/right mode
-- CPU enemy for custom games
 - custom match settings
-    - amount of players (2-4)
-        - amount of CPU players
     - winning amount of points
     - time limit
-    - modifiable player and ball speeds
-- saving high scores and match history

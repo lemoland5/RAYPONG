@@ -4,3 +4,9 @@ main.code-workspace
 
 # Compilation results
 *.exe
+
+# Dev overview images
+resources/img/palettepreview.png
+
+# Dev save data
+resources/data/log.txt

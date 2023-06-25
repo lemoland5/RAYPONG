@@ -27,14 +27,14 @@ Palette PALETTE_DEFAULT = {
 };
 
 Palette PALETTE_GAMEBOY{
-    (Color){7, 28, 7 , 100},        // bg       // dark grey
-    (Color){50, 90, 50, 100},       // text     // dark grey - slightly brighter
-    (Color){80, 90, 7, 250},        // texthigh // white
-    (Color){7, 28, 7 , 200},        // textdis  // dark red
-    (Color){25, 100, 90, 100},      // textcon  // pale green
-    (Color){80, 90, 7, 250},        // ball     // white
-    (Color){80, 90, 7, 200},        // pong1    // pale green
-    (Color){80, 90, 7, 100},        // goal1    // lime green
-    (Color){25, 100, 90, 200},      // pong2    // pale blue
-    (Color){25, 100, 90, 100},      // goal2    // dark blue
+    (Color){7, 28, 7 , 100},        // bg       
+    (Color){50, 90, 50, 100},       // text    
+    (Color){80, 90, 7, 250},        // texthigh
+    (Color){7, 28, 7 , 200},        // textdis  
+    (Color){25, 100, 90, 100},      // textcon  
+    (Color){80, 90, 7, 250},        // ball     
+    (Color){80, 90, 7, 200},        // pong1   
+    (Color){80, 90, 7, 100},        // goal1    
+    (Color){25, 100, 90, 200},      // pong2    
+    (Color){25, 100, 90, 100},      // goal2    
 };
