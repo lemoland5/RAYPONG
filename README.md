@@ -15,12 +15,12 @@
 - custom match settings
     - winning amount of points
     - time limit
-
-#### In development ####
 - feat/achievement system
     - viewable on stats page
 - custom color palettes
     - palettes unlock afer completing specific feats
+
+#### In development ####
 - loading options from file (user configurable)
     - custom resolution
         - make game entity members scale with screen size
