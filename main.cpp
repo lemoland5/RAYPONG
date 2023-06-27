@@ -1,14 +1,15 @@
 #include "raylib.h"
 #include "palette.h"
+#include "feats.h"
 
 #include <fstream>  // about.txt, log.txt
-
-#define MAX_FONTS               1
-#define MAX_MESSAGES            30
-#define MAX_IMAGES              4
-#define MAX_PALETTES            4
+#include <cstring>  // strlen my lord and savior
 
 std::string line;
+
+#define MAX_FONTS               1
+#define MAX_MESSAGES            40
+#define MAX_IMAGES              4
 
 enum State {
     Controls,       // display of keyboard scheme
@@ -18,7 +19,6 @@ enum State {
     Ingame,         // match
     Postgame,       // post-match summary
     PaletteTest,    // DEBUG - display test of current color palette
-    ReadTest,       // DEBUG - display test of data from read files 
 };
 
 enum SubState{
@@ -26,6 +26,7 @@ enum SubState{
     Options,            // settings page
     About,              // about page
     Stats,              // stats page
+    Feats,              // feats subpage
     Singleplayer = 1,   // singleplayer gamemode
     Multiplayer = 2,    // multiplayer gamemode
 };
@@ -58,6 +59,7 @@ typedef struct Ball{
     Vector2 vel;
     Color color;
     int lastTouched;
+    int amtbounced;
 } Ball;
 
 typedef struct Goal{
@@ -66,13 +68,19 @@ typedef struct Goal{
     Color color;
 } Goal;
 
-
-
 Pong player = { 0 };
 Pong enemy = { 0 };
 Ball ball = { 0 };
 Goal leftgoal;
 Goal rightgoal;
+
+
+
+
+
+
+
+
 
 // Main entry point
 // ----------------------------------------------------------------------------------------------------------------------
@@ -85,14 +93,19 @@ int main(){
     const int SCREEN_WIDTH = 1000;  // 1000
     const int SCREEN_HEIGHT = 600;  // 600
 
+
+
     const char* PROCESS_NAME = "RAYPONG";
     SetTargetFPS(60);
     
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, PROCESS_NAME);
 
+
+
+
     // game manager --------------------------------------------------------------------------------------------------------------------------- 
-    State GameState = Controls;         // default is Controls
-    SubState GameStateSub = None;   // default is None
+    State GameState = Menu;         // default is Controls
+    SubState GameStateSub = Options;   // default is None
     Result GameStateResult = Win;
     int frame_count = 0;            // resets every 10s
     bool paused = false;
@@ -100,8 +113,8 @@ int main(){
 
     const char* SubState_Standin = "Singleplayer";
     int scoreMax = 10;
-    int timeMax = 3;       
-    int timeCurrentMinutes = 0;
+    int timeMax = 3; 
+    int timeCurrentMinutes = 0;      
     int timeCurrentSeconds = 0;
 
 
@@ -111,20 +124,25 @@ int main(){
     
 
 
-    // images
-    Image keyboard = LoadImage("resources/img/keyboard.png");
-    Texture2D keyboardText = LoadTextureFromImage(keyboard);    // keyboard scheme
-    UnloadImage(keyboard);
+
 
     // palettes -----------------------------------------------------------------------------------------------------------------------------
     Palette palettes[MAX_PALETTES] = { 0 };
     palettes[0] = PALETTE_DEFAULT;
     palettes[1] = PALETTE_GAMEBOY;
-    Palette CurrentPalette = palettes[0];
+    palettes[2] = PALETTE_VIRTUALBOY;
+    palettes[3] = PALETTE_3RGB;
+    palettes[4] = PALETTE_NYX8;
+
+    int currentpaletteindex = 0;
+    Palette CurrentPalette = palettes[currentpaletteindex];
 
 
 
-
+    // keyboard scheme texture
+    Image image = LoadImage("resources/img/keyboard.png"); // Load image data into CPU memory (RAM)
+    Texture2D texture = LoadTextureFromImage(image);       // Image converted to texture, GPU memory (RAM -> VRAM)
+    UnloadImage(image);                                    // Unload image data from CPU memory (RAM)
 
 
 
@@ -133,6 +151,7 @@ int main(){
     // fonts
     Font fonts[MAX_FONTS] = { 0 };
     fonts[0] = LoadFont("resources/fonts/mecha.png");   // mecha
+
     
     //messages
 
@@ -222,7 +241,7 @@ int main(){
     messages[12] = const_cast<char*>(about_data.c_str());   // about
     messages[13] = "STATS";                 // menu
     messages[14] = "SAVE";                  // options   
-    messages[15] = "COLOR PALETTE";         // options 
+    messages[15] = "COLOR PALETTE: %d";     // options 
     messages[16] = "SCORE: %d";             // hud
     messages[17] = "PLAYING TO %d";         // hud
     messages[18] = "FINAL SCORE";           // postgame
@@ -238,6 +257,7 @@ int main(){
     messages[29] = "START GAME";            // pregame
 
 
+
     Vector2 TEXT_POS;
     TEXT_POS.x = ((SCREEN_WIDTH/2.0f) - fonts[0].baseSize*6.5f);
     TEXT_POS.y = SCREEN_HEIGHT/2.2f;
@@ -250,17 +270,20 @@ int main(){
     // RESULT, GAMEMODE, PLAYER SCORE, ENEMY SCORE
 
 
+    // feats
+    Feat feats[MAX_FEATS] = { 0 };
+    feats[0] = feat0pongmalong;
+    feats[1] = feat1socialpong;
+    feats[2] = feat2flawless;
+    feats[3] = feat3buzzerpinger;
+
+    float CurrentFeatUnlockedAlpha = 0.5f;
 
 
 
 
 
-
-
-
-
-
-    //transition controller
+    // transition controller
     float transition_counter = 1.0f;                                            // numeric controller
     bool transition_running_title = false;                                      // bool controller
 
@@ -279,6 +302,7 @@ int main(){
     bool restart_confirm = true;        // true means needs confirmation
 
     int menu_selected_option = 0;       // for horizontal menus
+    int menu_selected_option_last = -1;       // -1 for left, 1 for right
 
 
 
@@ -310,6 +334,7 @@ int main(){
     ball.size = 12.5f;
     ball.color = CurrentPalette.COLOR_BALL;
     ball.vel = (Vector2){-8, 14};
+    ball.amtbounced = 0;
 
     // goal setup
     leftgoal.wall = Left;
@@ -344,48 +369,6 @@ int main(){
         ++frame_count;
         if(frame_count == 600) frame_count = 0;
 
-        if(GameState == ReadTest){
-            BeginDrawing();
-                ClearBackground(CurrentPalette.COLOR_BG);
-
-                    DrawTextEx(fonts[0], 
-                    const_cast<char*>(log_data[0].c_str()),   
-                    (Vector2){TEXT_POS.x - fonts[0].baseSize*25.0f, TEXT_POS.y- fonts[0].baseSize*2.5f},
-                    fonts[0].baseSize*4.0f, 
-                    TEXT_SPACING, 
-                    CurrentPalette.COLOR_TEXT);
-
-                    
-                    DrawTextEx(fonts[0], 
-                    const_cast<char*>(log_data[1].c_str()),   
-                    (Vector2){TEXT_POS.x - fonts[0].baseSize*25.0f, TEXT_POS.y- fonts[0].baseSize*5.0f},
-                    fonts[0].baseSize*4.0f, 
-                    TEXT_SPACING, 
-                    CurrentPalette.COLOR_TEXT);
-                    
-                    DrawTextEx(fonts[0], 
-                    const_cast<char*>(log_data[2].c_str()),   
-                    (Vector2){TEXT_POS.x - fonts[0].baseSize*25.0f, TEXT_POS.y- fonts[0].baseSize*7.5f},
-                    fonts[0].baseSize*4.0f, 
-                    TEXT_SPACING, 
-                    CurrentPalette.COLOR_TEXT);
-                    
-                    DrawTextEx(fonts[0], 
-                    const_cast<char*>(log_data[3].c_str()),   
-                    (Vector2){TEXT_POS.x - fonts[0].baseSize*25.0f, TEXT_POS.y- fonts[0].baseSize*10.0f},
-                    fonts[0].baseSize*4.0f, 
-                    TEXT_SPACING, 
-                    CurrentPalette.COLOR_TEXT);
-                    
-                    DrawTextEx(fonts[0], 
-                    const_cast<char*>(log_data[4].c_str()),   
-                    (Vector2){TEXT_POS.x - fonts[0].baseSize*25.0f, TEXT_POS.y- fonts[0].baseSize*12.5f},
-                    fonts[0].baseSize*4.0f, 
-                    TEXT_SPACING, 
-                    CurrentPalette.COLOR_TEXT);
-            EndDrawing();
-        }
-
         if(GameState == PaletteTest){
             BeginDrawing();
 
@@ -418,10 +401,12 @@ int main(){
 
                 ClearBackground(CurrentPalette.COLOR_BG);
 
-                DrawTexture(keyboardText, 
-                SCREEN_WIDTH/2 - 275.0f, 
-                SCREEN_HEIGHT/2 - 84.0f, 
-                (Color){CurrentPalette.COLOR_TEXT.r, CurrentPalette.COLOR_TEXT.g, CurrentPalette.COLOR_TEXT.b, static_cast<unsigned char>(controls_alpha)});
+
+
+                DrawTexture(texture, SCREEN_WIDTH/2 - texture.width/2, SCREEN_HEIGHT/2 - texture.height/2,(Color){ CurrentPalette.COLOR_TEXT.r, CurrentPalette.COLOR_TEXT.g, CurrentPalette.COLOR_TEXT.b, static_cast<unsigned char>(controls_alpha)});
+
+
+
 
 
             EndDrawing();
@@ -619,7 +604,13 @@ int main(){
                     if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 5){            // option 5 - close window
                         GameState = Controls;
                         GameStateSub = None;
+
+
+
                         for(int i = 0; i< MAX_FONTS; i++) UnloadFont(fonts[i]);
+                        UnloadTexture(texture);
+
+                        
                         AlreadyClosed = true;
                         CloseWindow();
                     }
@@ -686,6 +677,17 @@ int main(){
                     TEXT_SPACING, 
                     CurrentPalette.COLOR_TEXT);
 
+                    // COLOR PALETTE
+                    DrawTextEx(fonts[0],                                    
+                    TextFormat(messages[15],currentpaletteindex), 
+                    (Vector2){TEXT_POS.x - fonts[0].baseSize*3.0f, TEXT_POS.y + fonts[0].baseSize*7.5f},
+                    fonts[0].baseSize*3.0f, 
+                    TEXT_SPACING, 
+                    (Color){CurrentPalette.COLOR_TEXT.r, 
+                    CurrentPalette.COLOR_TEXT.g, 
+                    CurrentPalette.COLOR_TEXT.g, 
+                    static_cast<unsigned char>((menu_alpha[3] + 1.0f)* 100)});
+
                     // SAVE
                     DrawTextEx(fonts[0],                                    
                     messages[14], 
@@ -723,37 +725,67 @@ int main(){
                     }   
                 }
                 else{
-                    if(IsKeyPressed(KEY_DOWN)) ++menu_selected; // downarrow
-                    if(IsKeyPressed(KEY_UP)) --menu_selected;   // uparrow
+                    if(menu_selected_option == 0){
+                        if(IsKeyPressed(KEY_DOWN)) ++menu_selected; // downarrow
+                        if(IsKeyPressed(KEY_UP)) --menu_selected;   // uparrow
 
-                    if(menu_selected < 1) menu_selected = 5;    //safeguard - loop to end
-                    if(menu_selected > 5) menu_selected = 1;    //safeguard - loop to start
+                        if(menu_selected < 1) menu_selected = 5;    //safeguard - loop to end
+                        if(menu_selected > 5) menu_selected = 1;    //safeguard - loop to start
+                        
+
+                        if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 1){            // option 1 - start game
+                            GameState = Ingame;
+                            GameStateSub = None;
+                            menu_selected = 0;
+                            menu_first_interacted = false;
+                        }
+                        // I love poland                                                    // option 2 - open settings page                 
+
+                        if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 3){            // option 3 - change palette
+                            menu_selected_option = 3;
+                            menu_selected = 3;
+                        }
+
+                        if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 4){            // option 4 - save settings
+
+                        }
+
+                        if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 5){            // option 5 - back to menu
+                            GameState = Menu;
+                            GameStateSub = None;
+                            menu_selected = 0;
+                            menu_first_interacted = false;
+                        }
+                    }
+                    if(menu_selected_option == 3){
+
+
+                        if(IsKeyPressed(KEY_LEFT)){
+                            --currentpaletteindex;
+                            menu_selected_option_last = -1;
+                            if(currentpaletteindex == -1) currentpaletteindex = MAX_PALETTES - 1;
+                        }       
+
+                        if(IsKeyPressed(KEY_RIGHT)){
+                            ++currentpaletteindex;
+                            menu_selected_option_last = 1;
+                            if(currentpaletteindex >= MAX_PALETTES) currentpaletteindex = 0;
+                        }      
+                                             
+                        if(currentpaletteindex != 0 && GetFeats()[currentpaletteindex-1] == '0'){
+                            currentpaletteindex += menu_selected_option_last;
+                            if(currentpaletteindex == -1) currentpaletteindex = MAX_PALETTES - 1;
+                            if(currentpaletteindex >= MAX_PALETTES) currentpaletteindex = 0;
+                        }
+                        else{
+                            CurrentPalette = palettes[currentpaletteindex];
+                        }
+
+                        if(IsKeyPressed(KEY_USER_PAUSE)) menu_selected_option = 0;
+
+
+                    }
                     
-
-                    if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 1){            // option 1 - start game
-                        GameState = Ingame;
-                        GameStateSub = None;
-                        menu_selected = 0;
-                        menu_first_interacted = false;
-                    }
-                    // I love poland                                                    // option 2 - open settings page                 
-
-                    if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 3){            // option 3 - open about page
-                        GameStateSub = About;
-                        menu_selected = 0;
-                        menu_first_interacted = false;
-                    }
-
-                    if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 4){            // option 4 - save settings
-
-                    }
-
-                    if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 5){            // option 5 - back to menu
-                        GameState = Menu;
-                        GameStateSub = None;
-                        menu_selected = 0;
-                        menu_first_interacted = false;
-                    }
                 }
                 
                 // set option alpha
@@ -784,21 +816,21 @@ int main(){
                     (Vector2){TEXT_POS.x - 175 + fonts[0].baseSize*2.5f, TEXT_POS.y + 75- fonts[0].baseSize*12.5f},
                     fonts[0].baseSize*4.0f, 
                     TEXT_SPACING, 
-                    CurrentPalette.COLOR_TEXT);
+                    CurrentPalette.COLOR_TEXT_CONFIRM);
 
                     for(int i = 0; i < 5; i++){
                         DrawRectangle(TEXT_POS.x + 10 - fonts[0].baseSize*11.5f,
                         TEXT_POS.y + 150 - fonts[0].baseSize*2.5f*i,
-                        548,
+                        555,
                         fonts[0].baseSize*2.0f,
-                        CurrentPalette.COLOR_GOAL2);
+                        CurrentPalette.COLOR_TEXT_CONFIRM);
 
                         DrawTextEx(fonts[0], 
                         const_cast<char*>(log_data[i].c_str()),   
                         (Vector2){TEXT_POS.x + 10 - fonts[0].baseSize*11.5f, TEXT_POS.y + 150 - fonts[0].baseSize*2.5f*i},
                         fonts[0].baseSize*2.0f, 
                         TEXT_SPACING, 
-                        CurrentPalette.COLOR_TEXT_CONFIRM);
+                        CurrentPalette.COLOR_BG);
                         
                     }
 
@@ -808,7 +840,7 @@ int main(){
                     // MAIN MENU
                     DrawTextEx(fonts[0],                                    
                     messages[11], 
-                    (Vector2){TEXT_POS.x + fonts[0].baseSize*1.0f, TEXT_POS.y + fonts[0].baseSize*12.5f},
+                    (Vector2){TEXT_POS.x + fonts[0].baseSize*1.0f, TEXT_POS.y + fonts[0].baseSize*13.0f},
                     fonts[0].baseSize*3.0f, 
                     TEXT_SPACING, 
                     (Color){CurrentPalette.COLOR_TEXT.r, 
@@ -819,7 +851,7 @@ int main(){
                     // FEATS
                     DrawTextEx(fonts[0],                                    
                     messages[23], 
-                    (Vector2){TEXT_POS.x + fonts[0].baseSize*3.4f, TEXT_POS.y + fonts[0].baseSize*15.0f},
+                    (Vector2){TEXT_POS.x + fonts[0].baseSize*3.4f, TEXT_POS.y + fonts[0].baseSize*15.5f},
                     fonts[0].baseSize*3.0f, 
                     TEXT_SPACING, 
                     (Color){CurrentPalette.COLOR_TEXT.r, 
@@ -857,7 +889,7 @@ int main(){
 
                     if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 2){            // option 2 - go to feats
                         GameState = Menu;
-                        GameStateSub = None;
+                        GameStateSub = Feats;
                         menu_selected = 0;
                         menu_first_interacted = false;
                     }      
@@ -872,6 +904,58 @@ int main(){
 
 
 
+            }
+
+            if(GameStateSub == Feats){
+                
+                BeginDrawing();
+
+                    ClearBackground(CurrentPalette.COLOR_BG);
+
+                    // title
+                    DrawTextEx(fonts[0], 
+                    messages[23], 
+                    (Vector2){TEXT_POS.x + fonts[0].baseSize*2.0f, TEXT_POS.y- fonts[0].baseSize*12.5f},
+                    fonts[0].baseSize*4.0f, 
+                    TEXT_SPACING, 
+                    CurrentPalette.COLOR_TEXT);
+
+                    // achbox
+                    for(int i = 0; i < MAX_FEATS; i++){
+
+                        if(GetFeats()[i] == '1') CurrentFeatUnlockedAlpha = 1.0f;
+                        else CurrentFeatUnlockedAlpha = 0.5f;
+
+                        // name rectangle
+                        DrawRectangle(SCREEN_WIDTH/2-417-5,SCREEN_HEIGHT/3.5f + fonts[0].baseSize*5.0f*i-2,strlen(feats[i].name)*fonts[0].baseSize*0.75f,30,(Color){static_cast<unsigned char>(CurrentPalette.COLOR_TEXT_DISABLED.r*CurrentFeatUnlockedAlpha),static_cast<unsigned char>(CurrentPalette.COLOR_TEXT_DISABLED.g*CurrentFeatUnlockedAlpha),static_cast<unsigned char>(CurrentPalette.COLOR_TEXT_DISABLED.b*CurrentFeatUnlockedAlpha),200});
+
+                        // big rectangle
+                        DrawRectangle(SCREEN_WIDTH/2-417-10,SCREEN_HEIGHT/3.5f + fonts[0].baseSize*5.0f*i-7,875,75,(Color){static_cast<unsigned char>(CurrentPalette.COLOR_TEXT_DISABLED.r*CurrentFeatUnlockedAlpha),static_cast<unsigned char>(CurrentPalette.COLOR_TEXT_DISABLED.g*CurrentFeatUnlockedAlpha),static_cast<unsigned char>(CurrentPalette.COLOR_TEXT_DISABLED.b*CurrentFeatUnlockedAlpha),100});
+
+                        // name
+                        DrawTextEx(fonts[0], const_cast<char*>(feats[i].name), (Vector2){SCREEN_WIDTH/2-417,SCREEN_HEIGHT/3.5f + fonts[0].baseSize*5.0f*i},fonts[0].baseSize*1.65f,TEXT_SPACING,(Color){static_cast<unsigned char>(CurrentPalette.COLOR_TEXT.r*CurrentFeatUnlockedAlpha), static_cast<unsigned char>(CurrentPalette.COLOR_TEXT.g*CurrentFeatUnlockedAlpha), static_cast<unsigned char>(CurrentPalette.COLOR_TEXT.b*CurrentFeatUnlockedAlpha), static_cast<unsigned char>(255*CurrentFeatUnlockedAlpha)});
+
+                        // reward
+                        DrawTextEx(fonts[0], const_cast<char*>(feats[i].reward), (Vector2){SCREEN_WIDTH/2-417+strlen(feats[i].name)*fonts[0].baseSize*0.75f,SCREEN_HEIGHT/3.5f + fonts[0].baseSize*5.0f*i},fonts[0].baseSize*1.65f,TEXT_SPACING,(Color){static_cast<unsigned char>(CurrentPalette.COLOR_TEXT.r*CurrentFeatUnlockedAlpha), static_cast<unsigned char>(CurrentPalette.COLOR_TEXT.g*CurrentFeatUnlockedAlpha), static_cast<unsigned char>(CurrentPalette.COLOR_TEXT.b*CurrentFeatUnlockedAlpha), static_cast<unsigned char>(255*CurrentFeatUnlockedAlpha)});
+
+                        // description
+                        DrawTextEx(fonts[0], const_cast<char*>(feats[i].description), (Vector2){SCREEN_WIDTH/2-417,SCREEN_HEIGHT/3.5f + fonts[0].baseSize*5.0f*i + fonts[0].baseSize*2.5f},fonts[0].baseSize*1.65f,TEXT_SPACING, (Color){static_cast<unsigned char>(CurrentPalette.COLOR_TEXT.r*CurrentFeatUnlockedAlpha), static_cast<unsigned char>(CurrentPalette.COLOR_TEXT.g*CurrentFeatUnlockedAlpha), static_cast<unsigned char>(CurrentPalette.COLOR_TEXT.b*CurrentFeatUnlockedAlpha), static_cast<unsigned char>(255*CurrentFeatUnlockedAlpha)});
+                    }
+
+                    // MAIN MENU
+                    DrawTextEx(fonts[0],                                    
+                    messages[11], 
+                    (Vector2){TEXT_POS.x + fonts[0].baseSize*1.0f, TEXT_POS.y + fonts[0].baseSize*13.0f},
+                    fonts[0].baseSize*3.0f, 
+                    TEXT_SPACING, 
+                    (Color){CurrentPalette.COLOR_TEXT_HIGHLIGHT});
+
+                EndDrawing();
+
+                if(IsKeyPressed(KEY_USER_SELECT)){
+                    GameState = Menu;
+                    GameStateSub = Stats;
+                }
             }
 
         }
@@ -889,7 +973,7 @@ int main(){
                 TEXT_SPACING, 
                 CurrentPalette.COLOR_TEXT);
 
-                // MAIN MENU
+                // PLAY
                 DrawTextEx(fonts[0],                                    
                 messages[29], 
                 (Vector2){TEXT_POS.x + fonts[0].baseSize*0.25f, TEXT_POS.y + fonts[0].baseSize*2.5f},
@@ -969,6 +1053,7 @@ int main(){
 
                     if(IsKeyPressed(KEY_USER_SELECT) && menu_selected == 1 && scoreMax > 0 && timeMax > 0){            // option 1 - start game
                         GameState = Ingame;
+                        ball.amtbounced = 0;
 
                         menu_selected = 0;
                         menu_first_interacted = false;
@@ -1004,9 +1089,8 @@ int main(){
                             SubState_Standin = "Singleplayer";
                         }
                     }
-                    if(IsKeyPressed(KEY_USER_PAUSE)){
-                        menu_selected_option = 0;
-                    }
+                    if(IsKeyPressed(KEY_USER_PAUSE)) menu_selected_option = 0;
+                    
                 }
                 if(menu_selected_option == 3){
                     if(IsKeyPressed(KEY_RIGHT)){
@@ -1125,6 +1209,14 @@ int main(){
                 ball.position.x = player.position.x + player.sizeX + ball.size;
                 ball.vel.x = 0 - ball.vel.x;
                 ball.lastTouched = 1;
+                ++ball.amtbounced;
+
+                if(ball.vel.y > -18 && ball.vel.y < 18){
+                    ball.vel.y *= float(GetRandomValue(8,16))/10;
+                }
+                if(ball.vel.y >= 18) ball.vel.y = 14;
+                if(ball.vel.y <= -18) ball.vel.y = -14;
+
                 // if(ball.position.y < player.position.y || ball.position.y > player.position.y + player.sizeY) ball.vel.y = 0 - ball.vel.y;
             }
 
@@ -1133,6 +1225,14 @@ int main(){
                 ball.position.x = enemy.position.x - ball.size;
                 ball.vel.x = 0 - ball.vel.x;
                 ball.lastTouched = 2;
+                ++ball.amtbounced;
+
+                if(ball.vel.y > -18 && ball.vel.y < 18){
+                    ball.vel.y *= float(GetRandomValue(8,16))/10;
+                }
+                if(ball.vel.y >= 18) ball.vel.y = 14;
+                if(ball.vel.y <= -18) ball.vel.y = -14;
+
                 // if(ball.position.y < enemy.position.y || ball.position.y > enemy.position.y + enemy.sizeY) ball.vel.y = 0 - ball.vel.y;
             }
 
@@ -1141,6 +1241,10 @@ int main(){
                 ball.position.x = SCREEN_WIDTH/2;
                 ball.position.y = SCREEN_HEIGHT/2;
                 ball.vel.x = 0 - ball.vel.x;
+
+                if(ball.vel.y < -10) ball.vel.y = -10;
+                if(ball.vel.y > 10) ball.vel.y = 10;
+
                 ++enemy.score;
 
                 ball.lastTouched = 0;
@@ -1151,6 +1255,10 @@ int main(){
                 ball.position.x = SCREEN_WIDTH/2;
                 ball.position.y = SCREEN_HEIGHT/2;
                 ball.vel.x = 0 - ball.vel.x;
+
+                if(ball.vel.y < -10) ball.vel.y = -10;
+                if(ball.vel.y > 10) ball.vel.y = 10;
+
                 ++player.score;
 
                 ball.lastTouched = 0;
@@ -1297,6 +1405,9 @@ int main(){
 
                             player.score = 0;
                             enemy.score = 0;
+                            ball.amtbounced = 0;
+                            timeCurrentMinutes = 0;
+                            timeCurrentSeconds = 0;
 
                             ball.position.x = SCREEN_WIDTH/2;
                             ball.position.y = SCREEN_HEIGHT/2;
@@ -1315,6 +1426,12 @@ int main(){
                         AlreadyClosed = true;
                         CloseWindow();*/
 
+                        player.score = 0;
+                        enemy.score = 0;
+                        ball.amtbounced = 0;
+                        timeCurrentMinutes = 0;
+                        timeCurrentSeconds = 0;
+
                         paused = false;
                         menu_first_interacted = false;
                         menu_selected = 0;          
@@ -1330,6 +1447,16 @@ int main(){
                 menu_alpha[menu_selected] = 1.5f;
             }
 
+            FeatTest(
+                player.score,
+                enemy.score, 
+                scoreMax,
+                timeCurrentSeconds, 
+                timeCurrentMinutes, 
+                timeMax, GameStateSub, 
+                GameStateResult, 
+                ball.amtbounced
+            );
         }
 
         if(GameState == Postgame){
@@ -1418,7 +1545,6 @@ int main(){
 
         }
 
-    
     }
     
 
@@ -1427,6 +1553,7 @@ int main(){
     // ----------------------------------------------------------------------------------------------------------------------
     if(!AlreadyClosed){
         for(int i = 0; i < MAX_FONTS; i++) UnloadFont(fonts[0]);
+        UnloadTexture(texture);
         CloseWindow();
     }
 
